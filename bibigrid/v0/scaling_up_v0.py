@@ -19,7 +19,7 @@ def validate_ip(ip):
 
 
 def add_new_workers_to_instances(worker_data):
-    print("Removing workers from instances")
+    print("Add workers to instances")
     with open(INSTANCES_YML, 'r+') as stream:
         try:
             instances = yaml.safe_load(stream)
