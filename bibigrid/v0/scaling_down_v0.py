@@ -73,8 +73,12 @@ if __name__ == '__main__':
             continue
         else:
             valid_ips.append(ip)
-    remove_worker_from_instances(ips=valid_ips)
-    delete_ip_yaml(ips=valid_ips)
-    os.chdir(PLAYBOOK_DIR)
-    remove_ip_from_ansible_hosts(ips=valid_ips)
-    os.system('ansible-playbook -v -i ansible_hosts  site.yml')
+    if len(valid_ips) > 0:
+
+        remove_worker_from_instances(ips=valid_ips)
+        delete_ip_yaml(ips=valid_ips)
+        os.chdir(PLAYBOOK_DIR)
+        remove_ip_from_ansible_hosts(ips=valid_ips)
+        os.system('ansible-playbook -v -i ansible_hosts  site.yml')
+    else:
+        print("No valid Ips found!")

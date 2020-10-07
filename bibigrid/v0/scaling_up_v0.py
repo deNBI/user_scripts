@@ -98,8 +98,12 @@ if __name__ == '__main__':
             continue
         else:
             valid_ips.append(ip)
-    workers_data = create_yml_file(ips=ips)
-    add_new_workers_to_instances(worker_data=workers_data)
-    os.chdir(PLAYBOOK_DIR)
-    add_ips_to_ansible_hosts(ips=valid_ips)
-    os.system('ansible-playbook -v -i ansible_hosts  site.yml')
+    if len(valid_ips) > 0:
+        workers_data = create_yml_file(ips=ips)
+        add_new_workers_to_instances(worker_data=workers_data)
+        os.chdir(PLAYBOOK_DIR)
+        add_ips_to_ansible_hosts(ips=valid_ips)
+        os.system('ansible-playbook -v -i ansible_hosts  site.yml')
+    else:
+        print("No valid Ips found!")
+
