@@ -1,9 +1,11 @@
 #!/usr/bin/python3
 import os
 import re
+import socket
 import sys
 from pathlib import Path
 
+import requests
 import yaml
 
 HOME = str(Path.home())
@@ -11,6 +13,22 @@ PLAYBOOK_DIR = HOME + '/playbook'
 PLAYBOOK_VARS_DIR = HOME + '/playbook/vars'
 ANSIBLE_HOSTS_FILE = PLAYBOOK_DIR + '/ansible_hosts'
 INSTANCES_YML = PLAYBOOK_VARS_DIR + '/instances.yml'
+
+CLUSTER_INFO_URL = "https://cloud.denbi.de/portal/public/clusters/"
+
+
+def get_cluster_data():
+    global CLUSTER_INFO_URL
+    hostname = socket.gethostname()
+    hostname = hostname.split('-')[-1]
+    CLUSTER_INFO_URL = CLUSTER_INFO_URL + hostname + "/"
+    res = requests.get(url=CLUSTER_INFO_URL, params={"scaling": "scaling_up"})
+    ips = []
+
+    cluster_data = res.json["active_worker"]
+    for cl in cluster_data:
+        ips.append(cluster_data['ip'])
+    return cluster_data, ips
 
 
 def validate_ip(ip):
@@ -47,26 +65,21 @@ def check_yml_data(data, file):
             sys.exit(1)
 
 
-def create_yml_file(ips):
+def create_yml_file(cluster_data):
     workers_data = []
-    for ip in ips:
-        current_file = HOME + '/' + ip + '.yml'
-        yaml_file_target = PLAYBOOK_VARS_DIR + '/' + ip + '.yml'
-        if os.path.isfile(current_file):
-            with open(current_file, 'r') as source, open(yaml_file_target, 'w+') as target:
+    for data in cluster_data:
+        yaml_file_target = PLAYBOOK_VARS_DIR + '/' + data['ip'] + '.yml'
+        if not os.path.exists(yaml_file_target):
+            with  open(yaml_file_target, 'w+') as target:
                 try:
-
-                    data = yaml.safe_load(source)
-                    check_yml_data(data=data, file=current_file)
                     yaml.dump(data, target)
                     workers_data.append(data)
                 except yaml.YAMLError as exc:
                     print(exc)
                     sys.exit(1)
         else:
-            print(
-                "No yaml file {} found! Please create the file and then restart the script.".format(
-                    current_file))
+            print("Yaml for worker with IP {} already exists".format(data['ip']))
+
     return workers_data
 
 
@@ -87,23 +100,12 @@ def add_ips_to_ansible_hosts(ips):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print("To few arguments")
-        sys.exit(1)
-    ips = sys.argv[1:]
-    valid_ips = []
-    for ip in ips:
-        if not validate_ip(ip):
-            print("{} is no valid Ip! SKIPPING".format(ip))
-            continue
-        else:
-            valid_ips.append(ip)
-    if len(valid_ips) > 0:
-        workers_data = create_yml_file(ips=ips)
+    data, valid_ips = get_cluster_data()
+    if len(data) > 0:
+        workers_data = create_yml_file(cluster_data=data)
         add_new_workers_to_instances(worker_data=workers_data)
         os.chdir(PLAYBOOK_DIR)
         add_ips_to_ansible_hosts(ips=valid_ips)
         os.system('ansible-playbook -v -i ansible_hosts  site.yml')
     else:
-        print("No valid Ips found!")
-
+        print("No active worker found!")

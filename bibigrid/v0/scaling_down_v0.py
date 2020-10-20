@@ -1,9 +1,11 @@
 #!/usr/bin/python3
 import os
 import re
+import socket
 import sys
 from pathlib import Path
 
+import requests
 import yaml
 
 HOME = str(Path.home())
@@ -11,6 +13,17 @@ PLAYBOOK_DIR = HOME + '/playbook'
 PLAYBOOK_VARS_DIR = HOME + '/playbook/vars'
 ANSIBLE_HOSTS_FILE = PLAYBOOK_DIR + '/ansible_hosts'
 INSTANCES_YML = PLAYBOOK_VARS_DIR + '/instances.yml'
+CLUSTER_INFO_URL = "https://cloud.denbi.de/portal/public/clusters/"
+
+
+def get_private_ips():
+    global CLUSTER_INFO_URL
+    hostname = socket.gethostname()
+    hostname = hostname.split('-')[-1]
+    CLUSTER_INFO_URL = CLUSTER_INFO_URL + hostname + "/"
+    res = requests.get(url=CLUSTER_INFO_URL, params={"scaling": "scaling_down"})
+    ips = res.json["private_ips"]
+    return ips
 
 
 def validate_ip(ip):
@@ -37,7 +50,7 @@ def remove_worker_from_instances(ips):
 
 
 def delete_ip_yaml(ips):
-    print("Delte yaml file")
+    print("Delete yaml file")
     for ip in ips:
         yaml_file = PLAYBOOK_VARS_DIR + '/' + ip + '.yml'
         if os.path.isfile(yaml_file):
@@ -45,7 +58,7 @@ def delete_ip_yaml(ips):
             os.remove(yaml_file)
             print("Deleted: ", yaml_file)
         else:
-            print("No file found: ", yaml_file)
+            print("Yaml already deleted: ", yaml_file)
 
 
 def remove_ip_from_ansible_hosts(ips):
@@ -62,10 +75,8 @@ def remove_ip_from_ansible_hosts(ips):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print("To few arguments")
-        sys.exit(1)
-    ips = sys.argv[1:]
+
+    ips = get_private_ips()
     valid_ips = []
     for ip in ips:
         if not validate_ip(ip):
