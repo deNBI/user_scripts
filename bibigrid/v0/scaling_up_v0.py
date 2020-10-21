@@ -25,7 +25,7 @@ def get_cluster_data():
     res = requests.get(url=CLUSTER_INFO_URL, params={"scaling": "scaling_up"})
     ips = []
 
-    cluster_data = res.json["active_worker"]
+    cluster_data = res.json()["active_worker"]
     for cl in cluster_data:
         ips.append(cl['ip'])
     return cluster_data, ips
