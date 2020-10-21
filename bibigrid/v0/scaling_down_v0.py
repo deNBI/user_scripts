@@ -22,7 +22,7 @@ def get_private_ips():
     hostname = hostname.split('-')[-1]
     CLUSTER_INFO_URL = CLUSTER_INFO_URL + hostname + "/"
     res = requests.get(url=CLUSTER_INFO_URL, params={"scaling": "scaling_down"})
-    ips = res.json["private_ips"]
+    ips = res.json()["private_ips"]
     return ips
 
 

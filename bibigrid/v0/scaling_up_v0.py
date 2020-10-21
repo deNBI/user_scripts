@@ -27,7 +27,7 @@ def get_cluster_data():
 
     cluster_data = res.json["active_worker"]
     for cl in cluster_data:
-        ips.append(cluster_data['ip'])
+        ips.append(cl['ip'])
     return cluster_data, ips
 
 
