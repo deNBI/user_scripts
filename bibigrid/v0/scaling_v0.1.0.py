@@ -38,9 +38,6 @@ class ScalingDown:
 
     def get_private_ips(self):
         global CLUSTER_INFO_URL
-        hostname = socket.gethostname()
-        hostname = hostname.split('-')[-1]
-        CLUSTER_INFO_URL = CLUSTER_INFO_URL + hostname + "/"
         res = requests.get(url=CLUSTER_INFO_URL, params={"scaling": "scaling_down"})
         ips = res.json()["private_ips"]
         return ips
@@ -104,9 +101,6 @@ class ScalingUp:
 
     def get_cluster_data(self):
         global CLUSTER_INFO_URL
-        hostname = socket.gethostname()
-        hostname = hostname.split('-')[-1]
-        CLUSTER_INFO_URL = CLUSTER_INFO_URL + hostname + "/"
         res = requests.get(url=CLUSTER_INFO_URL, params={"scaling": "scaling_up"})
         ips = []
 
@@ -173,6 +167,12 @@ class ScalingUp:
 def get_version():
     print("Version: ", VERSION)
 
+def get_cluster_id_by_hostname():
+    global CLUSTER_INFO_URL
+    hostname = socket.gethostname()
+    cluster_id = hostname.split('-')[-1]
+    CLUSTER_INFO_URL = CLUSTER_INFO_URL + cluster_id + "/"
+
 
 def run_ansible_playbook():
     os.chdir(PLAYBOOK_DIR)
@@ -186,7 +186,8 @@ if __name__ == '__main__':
             get_version()
         else:
             print("No usage found for param: ", arg)
+    else:
 
-    ScalingDown()
-    ScalingUp()
-    run_ansible_playbook()
+        ScalingDown()
+        ScalingUp()
+        run_ansible_playbook()
