@@ -187,7 +187,7 @@ if __name__ == '__main__':
         else:
             print("No usage found for param: ", arg)
     else:
-
+        get_cluster_id_by_hostname()
         ScalingDown()
         ScalingUp()
         run_ansible_playbook()
