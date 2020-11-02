@@ -39,7 +39,7 @@ class ScalingDown:
     def get_private_ips(self):
         global CLUSTER_INFO_URL
         res = requests.get(url=CLUSTER_INFO_URL, params={"scaling": "scaling_down"})
-        ips = res.json()["private_ips"]
+        ips = [ip for ip in res.json()["private_ips"] if ip is not None]
         return ips
 
     def validate_ip(self, ip):
@@ -104,7 +104,7 @@ class ScalingUp:
         res = requests.get(url=CLUSTER_INFO_URL, params={"scaling": "scaling_up"})
         ips = []
 
-        cluster_data = res.json()["active_worker"]
+        cluster_data = [data for data in  res.json()["active_worker"] if data is not None]
         for cl in cluster_data:
             ips.append(cl['ip'])
         return cluster_data, ips
