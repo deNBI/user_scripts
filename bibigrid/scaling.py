@@ -34,7 +34,7 @@ class ScalingDown:
             self.delete_ip_yaml(ips=valid_ips)
             self.remove_ip_from_ansible_hosts(ips=valid_ips)
         else:
-            print("No valid Ips found!")
+            print("No machines found for down scaling!")
 
     def get_private_ips(self):
         global CLUSTER_INFO_URL
