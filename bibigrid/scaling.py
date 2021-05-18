@@ -8,7 +8,7 @@ from pathlib import Path
 import requests
 import yaml
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 HOME = str(Path.home())
 PLAYBOOK_DIR = HOME + '/playbook'
 PLAYBOOK_VARS_DIR = HOME + '/playbook/vars'
