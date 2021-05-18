@@ -8,7 +8,7 @@ from pathlib import Path
 import requests
 import yaml
 
-VERSION = "0.1.0"
+VERSION = "0.1.2"
 HOME = str(Path.home())
 PLAYBOOK_DIR = HOME + '/playbook'
 PLAYBOOK_VARS_DIR = HOME + '/playbook/vars'
@@ -93,8 +93,8 @@ class ScalingUp:
     def __init__(self):
         data, valid_ips = self.get_cluster_data()
         if len(data) > 0:
-            workers_data = self.create_yml_file(cluster_data=data)
-            self.add_new_workers_to_instances(worker_data=workers_data)
+            self.create_yml_file(cluster_data=data)
+            self.add_new_workers_to_instances(worker_data=data)
             self.add_ips_to_ansible_hosts(ips=valid_ips)
         else:
             print("No active worker found!")
@@ -156,7 +156,6 @@ class ScalingUp:
             else:
                 print("Yaml for worker with IP {} already exists".format(data['ip']))
 
-        return workers_data
 
     def validate_ip(self, ip):
         print("Validate  IP: ", ip)
@@ -205,3 +204,4 @@ if __name__ == '__main__':
         ScalingDown()
         ScalingUp()
         run_ansible_playbook()
+
