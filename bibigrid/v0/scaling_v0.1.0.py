@@ -106,7 +106,17 @@ class ScalingUp:
 
         cluster_data = [data for data in  res.json()["active_worker"] if data is not None]
         for cl in cluster_data:
-            ips.append(cl['ip'])
+            ip = cl.get("ip", None)
+            hostname = cl['hostname']
+
+            if ip :
+                if self.validate_ip(ip):
+                    ips.append(ip)
+                else:
+                    print(f"{ip} is no valid Ip! SKIPPING worker {hostname}")
+            else:
+                status= cl['status']
+                print(f"No IP set for Worker {hostname}  - Worker Status [{status}]\n Worker needs to be ACTIVE for Scaling Up!\n Please restart this Script when the VM is ACTIVE - SKIPPING this Worker...")
         return cluster_data, ips
 
     def validate_ip(self, ip):
@@ -147,6 +157,10 @@ class ScalingUp:
                 print("Yaml for worker with IP {} already exists".format(data['ip']))
 
         return workers_data
+
+    def validate_ip(self, ip):
+        print("Validate  IP: ", ip)
+        return re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", ip)
 
     def add_ips_to_ansible_hosts(self, ips):
         print("Add ips to ansible_hosts")
