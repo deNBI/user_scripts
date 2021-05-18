@@ -93,8 +93,8 @@ class ScalingUp:
     def __init__(self):
         data, valid_ips = self.get_cluster_data()
         if len(data) > 0:
-            workers_data = self.create_yml_file(cluster_data=data)
-            self.add_new_workers_to_instances(worker_data=workers_data)
+            self.create_yml_file(cluster_data=data)
+            self.add_new_workers_to_instances(worker_data=data)
             self.add_ips_to_ansible_hosts(ips=valid_ips)
         else:
             print("No active worker found!")
@@ -132,21 +132,18 @@ class ScalingUp:
                 sys.exit(1)
 
     def create_yml_file(self, cluster_data):
-        workers_data = []
         for data in cluster_data:
             yaml_file_target = PLAYBOOK_VARS_DIR + '/' + data['ip'] + '.yml'
             if not os.path.exists(yaml_file_target):
                 with  open(yaml_file_target, 'w+') as target:
                     try:
                         yaml.dump(data, target)
-                        workers_data.append(data)
                     except yaml.YAMLError as exc:
                         print(exc)
                         sys.exit(1)
             else:
                 print("Yaml for worker with IP {} already exists".format(data['ip']))
 
-        return workers_data
 
     def add_ips_to_ansible_hosts(self, ips):
         print("Add ips to ansible_hosts")
