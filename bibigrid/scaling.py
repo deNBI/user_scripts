@@ -8,7 +8,7 @@ from pathlib import Path
 import requests
 import yaml
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 HOME = str(Path.home())
 PLAYBOOK_DIR = HOME + '/playbook'
 PLAYBOOK_VARS_DIR = HOME + '/playbook/vars'
@@ -106,7 +106,17 @@ class ScalingUp:
 
         cluster_data = [data for data in  res.json()["active_worker"] if data is not None]
         for cl in cluster_data:
-            ips.append(cl['ip'])
+            ip = cl.get("ip", None)
+            hostname = cl['hostname']
+
+            if ip :
+                if self.validate_ip(ip):
+                    ips.append(ip)
+                else:
+                    print(f"{ip} is no valid Ip! SKIPPING worker {hostname}")
+            else:
+                status= cl['status']
+                print(f"No IP set for Worker {hostname}  - Worker Status [{status}]\n Worker needs to be ACTIVE for Scaling Up!\n Please restart this Script when the VM is ACTIVE - SKIPPING this Worker...")
         return cluster_data, ips
 
     def validate_ip(self, ip):
@@ -132,18 +142,24 @@ class ScalingUp:
                 sys.exit(1)
 
     def create_yml_file(self, cluster_data):
+        workers_data = []
         for data in cluster_data:
             yaml_file_target = PLAYBOOK_VARS_DIR + '/' + data['ip'] + '.yml'
             if not os.path.exists(yaml_file_target):
                 with  open(yaml_file_target, 'w+') as target:
                     try:
                         yaml.dump(data, target)
+                        workers_data.append(data)
                     except yaml.YAMLError as exc:
                         print(exc)
                         sys.exit(1)
             else:
                 print("Yaml for worker with IP {} already exists".format(data['ip']))
 
+
+    def validate_ip(self, ip):
+        print("Validate  IP: ", ip)
+        return re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", ip)
 
     def add_ips_to_ansible_hosts(self, ips):
         print("Add ips to ansible_hosts")
@@ -188,3 +204,4 @@ if __name__ == '__main__':
         ScalingDown()
         ScalingUp()
         run_ansible_playbook()
+
