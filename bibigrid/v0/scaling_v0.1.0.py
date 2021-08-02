@@ -44,15 +44,19 @@ class ScalingDown:
     def get_private_ips(self):
         global CLUSTER_INFO_URL
         res = requests.post(url=CLUSTER_INFO_URL,
-                            json={"scaling": "scaling_down", "password": password},
+                            json={"scaling": "scaling_down", "password": self.password},
                             )
-        res = res.json()
-        version = res["VERSION"]
-        if version != VERSION:
-            print(OUTDATED_SCRIPT_MSG.format(SCRIPT_VERSION=VERSION, LATEST_VERSION=version))
+        if res.status_code == 200:
+            res = res.json()
+            version = res["VERSION"]
+            if version != VERSION:
+                print(OUTDATED_SCRIPT_MSG.format(SCRIPT_VERSION=VERSION, LATEST_VERSION=version))
+                sys.exit(1)
+            ips = [ip for ip in res["private_ips"] if ip is not None]
+            return ips
+        else:
+            print(OUTDATED_SCRIPT_MSG)
             sys.exit(1)
-        ips = [ip for ip in res["private_ips"] if ip is not None]
-        return ips
 
     def validate_ip(self, ip):
         print("Validate  IP: ", ip)
@@ -116,7 +120,7 @@ class ScalingUp:
         global CLUSTER_INFO_URL
 
         res = requests.post(url=CLUSTER_INFO_URL,
-                            json={"scaling": "scaling_up", "password": password})
+                            json={"scaling": "scaling_up", "password": self.password})
         if res.status_code == 200:
             res = res.json()
             version = res["VERSION"]
@@ -130,7 +134,8 @@ class ScalingUp:
                 ips.append(cl['ip'])
             return cluster_data, ips
         else:
-            print("")
+            print(OUTDATED_SCRIPT_MSG)
+            sys.exit(1)
 
     def validate_ip(self, ip):
         print("Validate  IP: ", ip)
