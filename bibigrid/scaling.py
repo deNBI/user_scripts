@@ -3,28 +3,23 @@ import os
 import re
 import socket
 import sys
-from getpass import getpass
 from pathlib import Path
 
 import requests
 import yaml
 
-VERSION = "0.2.0"
+VERSION = "0.1.2"
 HOME = str(Path.home())
 PLAYBOOK_DIR = HOME + '/playbook'
 PLAYBOOK_VARS_DIR = HOME + '/playbook/vars'
 ANSIBLE_HOSTS_FILE = PLAYBOOK_DIR + '/ansible_hosts'
 INSTANCES_YML = PLAYBOOK_VARS_DIR + '/instances.yml'
 CLUSTER_INFO_URL = "https://cloud.denbi.de/portal/public/clusters/"
-CLUSTER_OVERVIEW = "https://cloud.denbi.de/portal/webapp/#/virtualmachines/clusterOverview"
-WRONG_PASSWORD_MSG = f"The password seems to be wrong. Please verify it again, otherwise you can generate a new one for the cluster on the Cluster Overview ({CLUSTER_OVERVIEW})"
-OUTDATED_SCRIPT_MSG = "Your script is outdated [VERSION: {SCRIPT_VERSION} - latest is {LATEST_VERSION}] -  please download the current script and run it again!"
 
 
 class ScalingDown:
 
-    def __init__(self, password):
-        self.password = password
+    def __init__(self):
         ips = self.get_private_ips()
         valid_ips = []
         for ip in ips:
@@ -39,24 +34,13 @@ class ScalingDown:
             self.delete_ip_yaml(ips=valid_ips)
             self.remove_ip_from_ansible_hosts(ips=valid_ips)
         else:
-            print("No valid Ips found!")
+            print("No machines found for down scaling!")
 
     def get_private_ips(self):
         global CLUSTER_INFO_URL
-        res = requests.post(url=CLUSTER_INFO_URL,
-                            json={"scaling": "scaling_down", "password": self.password},
-                            )
-        if res.status_code == 200:
-            res = res.json()
-            version = res["VERSION"]
-            if version != VERSION:
-                print(OUTDATED_SCRIPT_MSG.format(SCRIPT_VERSION=VERSION, LATEST_VERSION=version))
-                sys.exit(1)
-            ips = [ip for ip in res["private_ips"] if ip is not None]
-            return ips
-        else:
-            print(OUTDATED_SCRIPT_MSG)
-            sys.exit(1)
+        res = requests.get(url=CLUSTER_INFO_URL, params={"scaling": "scaling_down"})
+        ips = [ip for ip in res.json()["private_ips"] if ip is not None]
+        return ips
 
     def validate_ip(self, ip):
         print("Validate  IP: ", ip)
@@ -106,36 +90,34 @@ class ScalingDown:
 
 class ScalingUp:
 
-    def __init__(self, password):
-        self.password = password
+    def __init__(self):
         data, valid_ips = self.get_cluster_data()
         if len(data) > 0:
-            workers_data = self.create_yml_file(cluster_data=data)
-            self.add_new_workers_to_instances(worker_data=workers_data)
+            self.create_yml_file(cluster_data=data)
+            self.add_new_workers_to_instances(worker_data=data)
             self.add_ips_to_ansible_hosts(ips=valid_ips)
         else:
             print("No active worker found!")
 
     def get_cluster_data(self):
         global CLUSTER_INFO_URL
+        res = requests.get(url=CLUSTER_INFO_URL, params={"scaling": "scaling_up"})
+        ips = []
 
-        res = requests.post(url=CLUSTER_INFO_URL,
-                            json={"scaling": "scaling_up", "password": self.password})
-        if res.status_code == 200:
-            res = res.json()
-            version = res["VERSION"]
-            if version != VERSION:
-                print(OUTDATED_SCRIPT_MSG.format(SCRIPT_VERSION=VERSION, LATEST_VERSION=version))
-                sys.exit(1)
-            ips = []
+        cluster_data = [data for data in  res.json()["active_worker"] if data is not None]
+        for cl in cluster_data:
+            ip = cl.get("ip", None)
+            hostname = cl['hostname']
 
-            cluster_data = [data for data in res["active_worker"] if data is not None]
-            for cl in cluster_data:
-                ips.append(cl['ip'])
-            return cluster_data, ips
-        else:
-            print(OUTDATED_SCRIPT_MSG)
-            sys.exit(1)
+            if ip :
+                if self.validate_ip(ip):
+                    ips.append(ip)
+                else:
+                    print(f"{ip} is no valid Ip! SKIPPING worker {hostname}")
+            else:
+                status= cl['status']
+                print(f"No IP set for Worker {hostname}  - Worker Status [{status}]\n Worker needs to be ACTIVE for Scaling Up!\n Please restart this Script when the VM is ACTIVE - SKIPPING this Worker...")
+        return cluster_data, ips
 
     def validate_ip(self, ip):
         print("Validate  IP: ", ip)
@@ -174,7 +156,10 @@ class ScalingUp:
             else:
                 print("Yaml for worker with IP {} already exists".format(data['ip']))
 
-        return workers_data
+
+    def validate_ip(self, ip):
+        print("Validate  IP: ", ip)
+        return re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", ip)
 
     def add_ips_to_ansible_hosts(self, ips):
         print("Add ips to ansible_hosts")
@@ -190,7 +175,6 @@ class ScalingUp:
                         if not ip_line in buf:
                             line = line + ip_line + "\n"
                 out_file.write(line)
-
 
 
 def get_version():
@@ -216,12 +200,8 @@ if __name__ == '__main__':
         else:
             print("No usage found for param: ", arg)
     else:
-        print("Please enter your cluster password:")
-        password = getpass()
-        if not password:
-            print("Password must not be empty!")
-            sys.exit(1)
         get_cluster_id_by_hostname()
-        ScalingDown(password=password)
-        ScalingUp(password=password)
+        ScalingDown()
+        ScalingUp()
         run_ansible_playbook()
+
