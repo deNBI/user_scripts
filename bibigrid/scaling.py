@@ -55,7 +55,7 @@ class ScalingDown:
             ips = [ip for ip in res["private_ips"] if ip is not None]
             return ips
         else:
-            print(OUTDATED_SCRIPT_MSG)
+            print(WRONG_PASSWORD_MSG)
             sys.exit(1)
 
     def validate_ip(self, ip):
@@ -134,7 +134,7 @@ class ScalingUp:
                 ips.append(cl['ip'])
             return cluster_data, ips
         else:
-            print(OUTDATED_SCRIPT_MSG)
+            print(WRONG_PASSWORD_MSG)
             sys.exit(1)
 
     def validate_ip(self, ip):
