@@ -212,7 +212,8 @@ def get_cluster_info_url():
 
 def run_ansible_playbook():
     os.chdir(PLAYBOOK_DIR)
-    os.system('ansible-playbook -v -i ansible_hosts  site.yml')
+    forks = os.cpu_count() * 4
+    os.system(f'ansible-playbook -v -i --forks {forks} ansible_hosts  site.yml')
 
 
 if __name__ == '__main__':
