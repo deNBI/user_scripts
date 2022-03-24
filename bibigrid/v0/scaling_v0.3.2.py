@@ -9,7 +9,7 @@ from pathlib import Path
 import requests
 import yaml
 
-VERSION = "0.3.0"
+VERSION = "0.3.2"
 HOME = str(Path.home())
 PLAYBOOK_DIR = HOME + '/playbook'
 PLAYBOOK_VARS_DIR = HOME + '/playbook/vars'
