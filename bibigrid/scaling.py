@@ -9,7 +9,7 @@ from pathlib import Path
 import requests
 import yaml
 
-VERSION = "0.3.2"
+VERSION = "0.3.3"
 HOME = str(Path.home())
 PLAYBOOK_DIR = HOME + '/playbook'
 PLAYBOOK_VARS_DIR = HOME + '/playbook/vars'
@@ -39,15 +39,18 @@ class ScalingDown:
 
     def get_scaling_down_data(self):
         res = requests.post(url=get_cluster_info_url(),
-                            json={"scaling": "scaling_down", "password": self.password},
+                            json={"scaling": "scaling_down", "password": self.password, "version": VERSION},
                             )
+        if res.status_code == 405:
+            print(res.json()["error"])
+            sys.exit(1)
         if res.status_code == 200:
             data_json = res.json()
             version = data_json["VERSION"]
             if version != VERSION:
                 print(OUTDATED_SCRIPT_MSG.format(SCRIPT_VERSION=VERSION, LATEST_VERSION=version))
                 sys.exit(1)
-        else:
+        if res.status_code == 400:
             print(WRONG_PASSWORD_MSG)
             sys.exit(1)
         return res.json()
@@ -123,15 +126,17 @@ class ScalingUp:
     def get_cluster_data(self):
 
         res = requests.post(url=get_cluster_info_url(),
-                            json={"scaling": "scaling_up", "password": self.password})
+                            json={"scaling": "scaling_up", "password": self.password, "version": VERSION})
+        if res.status_code == 405:
+            print(res.json()["error"])
+            sys.exit(1)
         if res.status_code == 200:
-            res = res.json()
-            version = res["VERSION"]
+            data_json = res.json()
+            version = data_json["VERSION"]
             if version != VERSION:
                 print(OUTDATED_SCRIPT_MSG.format(SCRIPT_VERSION=VERSION, LATEST_VERSION=version))
                 sys.exit(1)
-            return res
-        else:
+        if res.status_code == 400:
             print(WRONG_PASSWORD_MSG)
             sys.exit(1)
 
@@ -213,7 +218,7 @@ def get_cluster_info_url():
 def run_ansible_playbook():
     os.chdir(PLAYBOOK_DIR)
     forks = os.cpu_count() * 4
-    os.system(f'ansible-playbook -v -i ansible_hosts  --forks {forks}  site.yml')
+    os.system(f'ansible-playbook -v -i --forks {forks} ansible_hosts  site.yml')
 
 
 if __name__ == '__main__':
