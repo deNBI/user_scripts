@@ -50,9 +50,11 @@ class ScalingDown:
             if version != VERSION:
                 print(OUTDATED_SCRIPT_MSG.format(SCRIPT_VERSION=VERSION, LATEST_VERSION=version))
                 sys.exit(1)
-        if res.status_code == 400:
+        elif res.status_code == 401:
             print(WRONG_PASSWORD_MSG)
             sys.exit(1)
+        elif res.status_code == 400:
+            print("An error occured please contact cloud support")
         return res.json()
 
     def validate_ip(self, ip):
@@ -130,15 +132,18 @@ class ScalingUp:
         if res.status_code == 405:
             print(res.json()["error"])
             sys.exit(1)
-        if res.status_code == 200:
+        elif res.status_code == 200:
             data_json = res.json()
             version = data_json["VERSION"]
             if version != VERSION:
                 print(OUTDATED_SCRIPT_MSG.format(SCRIPT_VERSION=VERSION, LATEST_VERSION=version))
                 sys.exit(1)
-        if res.status_code == 400:
+        elif res.status_code == 401:
             print(WRONG_PASSWORD_MSG)
             sys.exit(1)
+        elif res.status_code == 400:
+            print("An error occured please contact cloud support")
+        return res.json()
 
     def validate_ip(self, ip):
         print("Validate  IP: ", ip)
