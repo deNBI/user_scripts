@@ -55,7 +55,7 @@ class ScalingDown:
 elif res.status_code == 401:
 == == == =
 if res.status_code == 400:
->> >> >> > 167
+    >> >> >> > 167
 b8575252de57b29bd4771e3676ec1b2abd88f
 print(WRONG_PASSWORD_MSG)
 sys.exit(1)
@@ -234,7 +234,9 @@ def get_cluster_info_url():
 def run_ansible_playbook():
     os.chdir(PLAYBOOK_DIR)
     forks = os.cpu_count() * 4
-    os.system(f'ansible-playbook -v  --forks {forks} -i ansible_hosts  site.yml')
+    ansible_command = f"ansible-playbook -v  --forks {forks} -i ansible_hosts  site.yml"
+    print(f"Run Ansible Command:\n{ansible_command}")
+    os.system(ansible_command)
 
 
 if __name__ == '__main__':
