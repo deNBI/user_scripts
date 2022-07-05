@@ -50,63 +50,72 @@ class ScalingDown:
             if version != VERSION:
                 print(OUTDATED_SCRIPT_MSG.format(SCRIPT_VERSION=VERSION, LATEST_VERSION=version))
                 sys.exit(1)
-        elif res.status_code == 401:
-            print(WRONG_PASSWORD_MSG)
-            sys.exit(1)
-        elif res.status_code == 400:
-            print("An error occured please contact cloud support")
-        return res.json()
 
-    def validate_ip(self, ip):
-        print("Validate  IP: ", ip)
-        valid = re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", ip)
-        if not valid:
-            print("{} is no valid Ip! SKIPPING".format(ip))
-        return valid
+<< << << < HEAD
+elif res.status_code == 401:
+== == == =
+if res.status_code == 400:
+>> >> >> > 167
+b8575252de57b29bd4771e3676ec1b2abd88f
+print(WRONG_PASSWORD_MSG)
+sys.exit(1)
+elif res.status_code == 400:
+print("An error occured please contact cloud support")
+return res.json()
 
-    def remove_worker_from_instances(self):
-        print("Removing workers from instances")
-        with open(INSTANCES_YML, 'a+') as stream:
+
+def validate_ip(self, ip):
+    print("Validate  IP: ", ip)
+    valid = re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", ip)
+    if not valid:
+        print("{} is no valid Ip! SKIPPING".format(ip))
+    return valid
+
+
+def remove_worker_from_instances(self):
+    print("Removing workers from instances")
+    with open(INSTANCES_YML, 'a+') as stream:
+        stream.seek(0)
+        try:
+            instances = yaml.safe_load(stream)
+            if not instances:
+                instances = {"workers": [], "deletedWorkers": [], "master": self.master_data}
+            instances_copy = instances.copy()
+            for idx, worker in enumerate(instances['workers']):
+                if worker['ip'] in self.valid_delete_ips:
+                    instances_copy['deletedWorkers'].append(worker)
+                    instances_copy['workers'].pop(idx)
             stream.seek(0)
-            try:
-                instances = yaml.safe_load(stream)
-                if not instances:
-                    instances = {"workers": [], "deletedWorkers": [], "master": self.master_data}
-                instances_copy = instances.copy()
-                for idx, worker in enumerate(instances['workers']):
-                    if worker['ip'] in self.valid_delete_ips:
-                        instances_copy['deletedWorkers'].append(worker)
-                        instances_copy['workers'].pop(idx)
-                stream.seek(0)
-                stream.truncate()
-                yaml.dump(instances, stream)
-            except yaml.YAMLError as exc:
-                print(exc)
-                sys.exit(1)
+            stream.truncate()
+            yaml.dump(instances, stream)
+        except yaml.YAMLError as exc:
+            print(exc)
+            sys.exit(1)
 
-    def delete_ip_yaml(self):
-        print("Delete yaml file")
-        for ip in self.valid_delete_ips:
-            yaml_file = PLAYBOOK_VARS_DIR + '/' + ip + '.yml'
-            if os.path.isfile(yaml_file):
-                print("Found: ", yaml_file)
-                os.remove(yaml_file)
-                print("Deleted: ", yaml_file)
-            else:
-                print("Yaml already deleted: ", yaml_file)
 
-    def remove_ip_from_ansible_hosts(self):
+def delete_ip_yaml(self):
+    print("Delete yaml file")
+    for ip in self.valid_delete_ips:
+        yaml_file = PLAYBOOK_VARS_DIR + '/' + ip + '.yml'
+        if os.path.isfile(yaml_file):
+            print("Found: ", yaml_file)
+            os.remove(yaml_file)
+            print("Deleted: ", yaml_file)
+        else:
+            print("Yaml already deleted: ", yaml_file)
 
-        print("Remove ips from ansible_hosts")
-        lines = []
-        with open(ANSIBLE_HOSTS_FILE, 'r+') as ansible_hosts:
-            for line in ansible_hosts:
-                if not any(bad_word in line for bad_word in self.valid_delete_ips):
-                    lines.append(line)
-            ansible_hosts.seek(0)
-            ansible_hosts.truncate()
-            for line in lines:
-                ansible_hosts.write(line)
+
+def remove_ip_from_ansible_hosts(self):
+    print("Remove ips from ansible_hosts")
+    lines = []
+    with open(ANSIBLE_HOSTS_FILE, 'r+') as ansible_hosts:
+        for line in ansible_hosts:
+            if not any(bad_word in line for bad_word in self.valid_delete_ips):
+                lines.append(line)
+        ansible_hosts.seek(0)
+        ansible_hosts.truncate()
+        for line in lines:
+            ansible_hosts.write(line)
 
 
 class ScalingUp:
@@ -133,12 +142,14 @@ class ScalingUp:
             print(res.json()["error"])
             sys.exit(1)
         elif res.status_code == 200:
+
             data_json = res.json()
             version = data_json["VERSION"]
             if version != VERSION:
                 print(OUTDATED_SCRIPT_MSG.format(SCRIPT_VERSION=VERSION, LATEST_VERSION=version))
                 sys.exit(1)
         elif res.status_code == 401:
+
             print(WRONG_PASSWORD_MSG)
             sys.exit(1)
         elif res.status_code == 400:
