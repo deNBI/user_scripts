@@ -50,12 +50,15 @@ class ScalingDown:
             if version != VERSION:
                 print(OUTDATED_SCRIPT_MSG.format(SCRIPT_VERSION=VERSION, LATEST_VERSION=version))
                 sys.exit(1)
+
         elif res.status_code == 401:
+
             print(WRONG_PASSWORD_MSG)
             sys.exit(1)
         elif res.status_code == 400:
             print("An error occured please contact cloud support")
         return res.json()
+
 
     def validate_ip(self, ip):
         print("Validate  IP: ", ip)
@@ -63,6 +66,7 @@ class ScalingDown:
         if not valid:
             print("{} is no valid Ip! SKIPPING".format(ip))
         return valid
+
 
     def remove_worker_from_instances(self):
         print("Removing workers from instances")
@@ -84,6 +88,7 @@ class ScalingDown:
                 print(exc)
                 sys.exit(1)
 
+
     def delete_ip_yaml(self):
         print("Delete yaml file")
         for ip in self.valid_delete_ips:
@@ -95,8 +100,8 @@ class ScalingDown:
             else:
                 print("Yaml already deleted: ", yaml_file)
 
-    def remove_ip_from_ansible_hosts(self):
 
+    def remove_ip_from_ansible_hosts(self):
         print("Remove ips from ansible_hosts")
         lines = []
         with open(ANSIBLE_HOSTS_FILE, 'r+') as ansible_hosts:
@@ -133,12 +138,14 @@ class ScalingUp:
             print(res.json()["error"])
             sys.exit(1)
         elif res.status_code == 200:
+
             data_json = res.json()
             version = data_json["VERSION"]
             if version != VERSION:
                 print(OUTDATED_SCRIPT_MSG.format(SCRIPT_VERSION=VERSION, LATEST_VERSION=version))
                 sys.exit(1)
         elif res.status_code == 401:
+
             print(WRONG_PASSWORD_MSG)
             sys.exit(1)
         elif res.status_code == 400:
@@ -223,7 +230,9 @@ def get_cluster_info_url():
 def run_ansible_playbook():
     os.chdir(PLAYBOOK_DIR)
     forks = os.cpu_count() * 4
-    os.system(f'ansible-playbook -v -i --forks {forks} ansible_hosts  site.yml')
+    ansible_command = f"ansible-playbook -v  --forks {forks} -i ansible_hosts  site.yml"
+    print(f"Run Ansible Command:\n{ansible_command}")
+    os.system(ansible_command)
 
 
 if __name__ == '__main__':
