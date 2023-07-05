@@ -79,7 +79,7 @@ def get_cluster_data(password):
     return res.json()
 
 
-def update_workers_yml(master_data, worker_data, dummy_worker):
+def update_workers_yml(master_data, worker_data):
     print("Update Worker YAML")
     print(f"Update Worker Yaml with data: - {worker_data}")
     new_file = ANSIBLE_HOSTS_FILE + ".tmp"  # Temporary file to store modified contents
@@ -89,8 +89,6 @@ def update_workers_yml(master_data, worker_data, dummy_worker):
         "deletedWorkers": [],
         "master": master_data,
     }
-    if dummy_worker is not None:
-        instances_mod["workers"].append(dummy_worker)
     worker_ips = set()
     unique_workers = []
 
