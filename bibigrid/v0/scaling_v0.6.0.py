@@ -17,7 +17,7 @@ PLAYBOOK_VARS_DIR = HOME + '/playbook/vars'
 ANSIBLE_HOSTS_FILE = PLAYBOOK_DIR + '/ansible_hosts'
 INSTANCES_YML = PLAYBOOK_VARS_DIR + '/instances.yml'
 COMMON_CONFIGURATION_YML = PLAYBOOK_VARS_DIR + '/common_configuration.yml'
-CLUSTER_INFO_URL = "https://simplevm.denbi.de/portal/public/clusters_scaling/"
+CLUSTER_INFO_URL = "https://simplevm.denbi.de/portal/api/autoscaling/{cluster_id}/scale-data/"
 CLUSTER_OVERVIEW =  "https://simplevm.denbi.de/portal/webapp/#/clusters/overview"
 WRONG_PASSWORD_MSG = f"The password seems to be wrong. Please verify it again, otherwise you can generate a new one for the cluster on the Cluster Overview ({CLUSTER_OVERVIEW})"
 OUTDATED_SCRIPT_MSG = "Your script is outdated [VERSION: {SCRIPT_VERSION} - latest is {LATEST_VERSION}] -  please download the current script and run it again!"
@@ -59,7 +59,7 @@ def update_all_yml_files(password):
 
 def get_cluster_data(password):
     res = requests.post(url=get_cluster_info_url(),
-                        json={"scaling": "scaling_up", "password": password, "version": VERSION})
+                        json={"scaling": "scaling_up","scaling_type":"manualscaling", "password": password, "version": VERSION})
     if res.status_code in [405, 400]:
         print(res.json()["error"])
         sys.exit(1)
@@ -234,7 +234,7 @@ def get_cluster_id_by_hostname():
 def get_cluster_info_url():
     cluster_id = get_cluster_id_by_hostname()
 
-    full_info_url = f"{CLUSTER_INFO_URL}{cluster_id}/"
+    full_info_url = CLUSTER_INFO_URL.format(cluster_id=cluster_id) +"/"
     return full_info_url
 
 
