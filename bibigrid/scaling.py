@@ -35,8 +35,8 @@ def update_all_yml_files(password):
         worker
         for worker in data["active_worker"]
         if worker is not None
-           and worker["status"] == "ACTIVE"
-           and worker["ip"] is not None
+           and worker.get("status","").lower() == "ACTIVE"
+           and worker.get("ip") is not None
     ]
 
     valid_upscale_ips = [cl["ip"] for cl in cluster_data]
