@@ -10,7 +10,7 @@ from pathlib import Path
 import requests
 import yaml
 
-VERSION = "0.6.0"
+VERSION = "0.6.1"
 HOME = str(Path.home())
 PLAYBOOK_DIR = HOME + '/playbook'
 PLAYBOOK_VARS_DIR = HOME + '/playbook/vars'
@@ -234,7 +234,7 @@ def get_cluster_id_by_hostname():
 def get_cluster_info_url():
     cluster_id = get_cluster_id_by_hostname()
 
-    full_info_url = CLUSTER_INFO_URL.format(cluster_id=cluster_id) +"/"
+    full_info_url = CLUSTER_INFO_URL.format(cluster_id=cluster_id)
     return full_info_url
 
 
