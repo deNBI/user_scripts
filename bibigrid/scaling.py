@@ -10,7 +10,7 @@ from pathlib import Path
 import requests
 import yaml
 
-VERSION = "0.6.1"
+VERSION = "0.6.2"
 HOME = str(Path.home())
 PLAYBOOK_DIR = HOME + '/playbook'
 PLAYBOOK_VARS_DIR = HOME + '/playbook/vars'
@@ -39,7 +39,7 @@ def update_all_yml_files(password):
         worker
         for worker in data["active_worker"]
         if worker is not None
-           and worker.get("status", "").lower() == "ACTIVE"
+           and worker.get("status", "").lower() == "active"
            and worker.get("ip") is not None
     ]
 
