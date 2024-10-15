@@ -18,9 +18,13 @@ ANSIBLE_HOSTS_FILE = PLAYBOOK_DIR + '/ansible_hosts'
 INSTANCES_YML = PLAYBOOK_VARS_DIR + '/instances.yml'
 COMMON_CONFIGURATION_YML = PLAYBOOK_VARS_DIR + '/common_configuration.yml'
 CLUSTER_INFO_URL = "https://simplevm.denbi.de/portal/api/autoscaling/{cluster_id}/scale-data/"
-CLUSTER_OVERVIEW =  "https://simplevm.denbi.de/portal/webapp/#/clusters/overview"
+SCALING_SCRIPT_LINK = "https://raw.githubusercontent.com/deNBI/user_scripts/master/bibigrid/scaling.py'"
+CLUSTER_OVERVIEW = "https://simplevm.denbi.de/portal/webapp/#/clusters/overview"
 WRONG_PASSWORD_MSG = f"The password seems to be wrong. Please verify it again, otherwise you can generate a new one for the cluster on the Cluster Overview ({CLUSTER_OVERVIEW})"
-OUTDATED_SCRIPT_MSG = "Your script is outdated [VERSION: {SCRIPT_VERSION} - latest is {LATEST_VERSION}] -  please download the current script and run it again!"
+OUTDATED_SCRIPT_MSG = (
+    "Your script is outdated [VERSION: {SCRIPT_VERSION} - latest is {LATEST_VERSION}] -  please download the current script and run it again!\n"
+    "You can download the current script via:\n\n"
+    f"wget -O scaling.py {SCALING_SCRIPT_LINK}")
 
 
 def update_all_yml_files(password):
@@ -35,7 +39,7 @@ def update_all_yml_files(password):
         worker
         for worker in data["active_worker"]
         if worker is not None
-           and worker.get("status","").lower() == "ACTIVE"
+           and worker.get("status", "").lower() == "ACTIVE"
            and worker.get("ip") is not None
     ]
 
@@ -59,7 +63,7 @@ def update_all_yml_files(password):
 
 def get_cluster_data(password):
     res = requests.post(url=get_cluster_info_url(),
-                        json={"scaling": "scaling_up","scaling_type":"manualscaling", "password": password, "version": VERSION})
+                        json={"scaling": "scaling_up", "scaling_type": "manualscaling", "password": password, "version": VERSION})
     if res.status_code in [405, 400]:
         print(res.json()["error"])
         sys.exit(1)
