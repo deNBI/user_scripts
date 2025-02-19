@@ -61,7 +61,7 @@ def update_all_yml_files(password):
         return False
     
     groups_vars = data.get("groups_vars", {})
-    hosts_entries = data.get("hosts_entries", {})
+    hosts_entries = data.get("host_entries", {})
     ansible_hosts = data.get("ansible_hosts", {})
 
     if hosts_entries.get("host_entries"):
