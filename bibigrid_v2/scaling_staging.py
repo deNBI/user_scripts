@@ -17,9 +17,9 @@ PLAYBOOK_VARS_DIR = os.path.join(PLAYBOOK_DIR, 'vars')
 ANSIBLE_HOSTS_FILE = os.path.join(PLAYBOOK_DIR, 'ansible_hosts')
 ANSIBLE_HOSTS_ENTRIES = os.path.join(PLAYBOOK_VARS_DIR, 'hosts.yaml')
 PLAYBOOK_GROUP_VARS_DIR = os.path.join(PLAYBOOK_DIR, 'group_vars')
-CLUSTER_INFO_URL = "https://simplevm.denbi.de/portal/api/autoscaling/{cluster_id}/scale-data/"
+CLUSTER_INFO_URL = "https://simplevm-dev.bi.denbi.de/portal/api/autoscaling/{cluster_id}/scale-data/"
 SCALING_SCRIPT_LINK = "https://raw.githubusercontent.com/deNBI/user_scripts/master/bibigrid_v2/scaling.py"
-CLUSTER_OVERVIEW = "https://simplevm.denbi.de/portal/webapp/#/clusters/overview"
+CLUSTER_OVERVIEW = "https://simplevm-dev.bi.denbi.de/portal/webapp/#/clusters/overview"
 WRONG_PASSWORD_MSG = f"The password seems to be wrong. Please verify it again, otherwise you can generate a new one on the Cluster Overview ({CLUSTER_OVERVIEW})"
 OUTDATED_SCRIPT_MSG = f"Your script is outdated [VERSION: {{SCRIPT_VERSION}} - latest is {{LATEST_VERSION}}] - please download the current script and run it again!\nYou can download the current script via:\n\nwget -O scaling.py {SCALING_SCRIPT_LINK}"
 
@@ -56,18 +56,24 @@ def get_password():
 def update_all_yml_files(password):
     print("Initiating scaling...")
     data = get_cluster_data(password)
+    print(data)
+
     if not data:
         print("Failed to retrieve scaling data.")
         return False
-    
     groups_vars = data.get("groups_vars", {})
     hosts_entries = data.get("host_entries", {})
     ansible_hosts = data.get("ansible_hosts", {})
 
     if hosts_entries.get("host_entries"):
         changed_hosts = replace_ansible_hosts(ansible_hosts)
+        print(f"changed hosts --> {changed_hosts}")
         changed_host_entries = replace_host_entries(hosts_entries)
+        print(f"changed changed_host_entries --> {changed_host_entries}")
+
         changed_groups = replace_group_vars(groups_vars)
+        print(f"changed changed_groups --> {changed_groups}")
+
         return changed_hosts or changed_host_entries or changed_groups
 
     print("No active workers found!")
