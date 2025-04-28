@@ -9,7 +9,8 @@ from pathlib import Path
 
 import requests
 import yaml
-
+import re
+import subprocess
 VERSION = "0.6.2"
 HOME = str(Path.home())
 PLAYBOOK_DIR = HOME + '/playbook'
@@ -48,18 +49,47 @@ def update_all_yml_files(password):
 
     delete_workers_ip_yaml(valid_upscale_ips=valid_upscale_ips)
 
+
+
     if cluster_data:
         workers_data = create_worker_yml_file(cluster_data=cluster_data)
 
     else:
         print("No active worker found!")
         workers_data = []
+        generate_dummy_node()
+        sys.exit(0)
     workers_file_changed = update_workers_yml(
         worker_data=workers_data, master_data=master_data
     )
     host_file_changed = add_ips_to_ansible_hosts(valid_upscale_ips=valid_upscale_ips)
     return host_file_changed or workers_file_changed
 
+
+def generate_dummy_node():
+    print("Generating Dummy Node")
+    # Read slurm.conf file into memory
+    with open("/etc/slurm/slurm.conf", "r") as f:
+        lines = f.readlines()
+
+    # Add dummy node if it's not already present
+    dummy_node_added = False
+    for i, line in enumerate(lines):
+        if "NodeName=bibigrid-master" in line:
+            if not any("NodeName=dummy" in x for x in lines):
+                lines.insert(i + 1, "NodeName=dummy SocketsPerBoard=1 CoresPerSocket=1 RealMemory=1\\n")
+                dummy_node_added = True
+            break
+
+    # Update partition configuration to use the dummy node if not already set
+    for i, line in enumerate(lines):
+        if "PartitionName=debug" in line:
+            if "Nodes=dummy" not in line:
+                lines[i] = re.sub(r"(PartitionName=debug\\s+Nodes=\\s*)", r"\\1dummy ", line)
+
+    # Write changes back to file
+    with open("/etc/slurm/slurm.conf", "w") as f:
+        subprocess.run(['sudo', 'tee', '/etc/slurm/slurm.conf'], input='\\n'.join(lines).encode())
 
 def get_cluster_data(password):
     res = requests.post(url=get_cluster_info_url(),
