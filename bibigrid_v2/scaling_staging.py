@@ -23,6 +23,7 @@ CLUSTER_OVERVIEW = "https://simplevm-dev.bi.denbi.de/portal/webapp/#/clusters/ov
 WRONG_PASSWORD_MSG = f"The password seems to be wrong. Please verify it again, otherwise you can generate a new one on the Cluster Overview ({CLUSTER_OVERVIEW})"
 OUTDATED_SCRIPT_MSG = f"Your script is outdated [VERSION: {{SCRIPT_VERSION}} - latest is {{LATEST_VERSION}}] - please download the current script and run it again!\nYou can download the current script via:\n\nwget -O scaling.py {SCALING_SCRIPT_LINK}"
 
+
 def main():
     args = parse_arguments()
     if args.version:
@@ -30,23 +31,35 @@ def main():
         sys.exit()
 
     password = get_password()
+    if args.force:
+        print(f"Force Parameter Provided... Force Playbook Run")
+
     file_changed = update_all_yml_files(password)
-    
+
     if file_changed:
         print("Files changed. Running playbook...")
         run_ansible_playbook()
+    elif args.force:
+        print("Force run requested. Running playbook...")
+        run_ansible_playbook()
     else:
-        print("No changes detected. Skipping playbook execution.")
+        print(
+            "No changes detected and no force run requested. Skipping playbook execution.")
 
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Cluster Scaling Script")
-    parser.add_argument("-v", "--version", action="store_true", help="Show the version and exit")
+    parser.add_argument("-v", "--version", action="store_true",
+                        help="Show the version and exit")
+    parser.add_argument("-f", "--force", action="store_true",
+                        help="Force Playbook Run")
+
     return parser.parse_args()
 
 
 def get_password():
-    password = getpass("Please enter your cluster password (input will be hidden): ")
+    password = getpass(
+        "Please enter your cluster password (input will be hidden): ")
     if not password:
         print("Password must not be empty!")
         sys.exit(1)
@@ -64,8 +77,7 @@ def update_all_yml_files(password):
     groups_vars = data.get("groups_vars", {})
     hosts_entries = data.get("host_entries", {})
     ansible_hosts = data.get("ansible_hosts", {})
-
-    if hosts_entries.get("host_entries"):
+    try:
         changed_hosts = replace_ansible_hosts(ansible_hosts)
         print(f"changed hosts --> {changed_hosts}")
         changed_host_entries = replace_host_entries(hosts_entries)
@@ -76,7 +88,9 @@ def update_all_yml_files(password):
 
         return changed_hosts or changed_host_entries or changed_groups
 
-    print("No active workers found!")
+    except:
+        print(f"Could not get hosts entries! -- {data}")
+        sys.exit(1)
     return False
 
 
@@ -85,13 +99,13 @@ def replace_group_vars(groups_vars):
     for key, value in groups_vars.items():
         file_path = os.path.join(PLAYBOOK_GROUP_VARS_DIR, f"{key}.yaml")
         if not os.path.exists(file_path):
-             something_changed = True
+            something_changed = True
         yaml_data = yaml.dump(value, default_flow_style=False)
         backup_and_replace(file_path, yaml_data)
-        
+
         if not something_changed and not filecmp.cmp(file_path, file_path + '.bak'):
             something_changed = True
-            
+
     return something_changed
 
 
@@ -105,14 +119,14 @@ def replace_ansible_hosts(ansible_hosts):
 
 def backup_and_replace(file_path, new_content):
     backup_file = file_path + '.bak'
-    is_new_file=False
+    is_new_file = False
     if os.path.exists(file_path):
         shutil.copy2(file_path, backup_file)
     else:
-        is_new_file=True
+        is_new_file = True
     with open(file_path, 'w') as f:
         f.write(new_content)
-    
+
     os.chmod(file_path, 0o770)
 
     return is_new_file or not filecmp.cmp(file_path, backup_file)
@@ -137,7 +151,8 @@ def get_cluster_data(password):
     if res.status_code == 200:
         data_json = res.json()
         if data_json.get("VERSION") != VERSION:
-            print(OUTDATED_SCRIPT_MSG.format(SCRIPT_VERSION=VERSION, LATEST_VERSION=data_json["VERSION"]))
+            print(OUTDATED_SCRIPT_MSG.format(
+                SCRIPT_VERSION=VERSION, LATEST_VERSION=data_json["VERSION"]))
             sys.exit(1)
         return data_json
 
