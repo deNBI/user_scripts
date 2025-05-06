@@ -1,302 +1,189 @@
 #!/usr/bin/python3
 import filecmp
 import os
-import re
+import shutil
 import socket
 import sys
 from getpass import getpass
 from pathlib import Path
-
 import requests
 import yaml
-import re
-import subprocess
-VERSION = "0.6.2"
+import argparse
+import json
+VERSION = "0.1.0"
 HOME = str(Path.home())
-PLAYBOOK_DIR = HOME + '/playbook'
-PLAYBOOK_VARS_DIR = HOME + '/playbook/vars'
-ANSIBLE_HOSTS_FILE = PLAYBOOK_DIR + '/ansible_hosts'
-INSTANCES_YML = PLAYBOOK_VARS_DIR + '/instances.yml'
-COMMON_CONFIGURATION_YML = PLAYBOOK_VARS_DIR + '/common_configuration.yml'
+PLAYBOOK_DIR = os.path.join(HOME, 'playbook')
+PLAYBOOK_VARS_DIR = os.path.join(PLAYBOOK_DIR, 'vars')
+ANSIBLE_HOSTS_FILE = os.path.join(PLAYBOOK_DIR, 'ansible_hosts')
+ANSIBLE_HOSTS_ENTRIES = os.path.join(PLAYBOOK_VARS_DIR, 'hosts.yaml')
+PLAYBOOK_GROUP_VARS_DIR = os.path.join(PLAYBOOK_DIR, 'group_vars')
 CLUSTER_INFO_URL = "https://simplevm.denbi.de/portal/api/autoscaling/{cluster_id}/scale-data/"
-SCALING_SCRIPT_LINK = "https://raw.githubusercontent.com/deNBI/user_scripts/master/bibigrid/scaling.py"
+SCALING_SCRIPT_LINK = "https://raw.githubusercontent.com/deNBI/user_scripts/master/bibigrid_v2/scaling.py"
 CLUSTER_OVERVIEW = "https://simplevm.denbi.de/portal/webapp/#/clusters/overview"
-WRONG_PASSWORD_MSG = f"The password seems to be wrong. Please verify it again, otherwise you can generate a new one for the cluster on the Cluster Overview ({CLUSTER_OVERVIEW})"
-OUTDATED_SCRIPT_MSG = (
-    "Your script is outdated [VERSION: {SCRIPT_VERSION} - latest is {LATEST_VERSION}] -  please download the current script and run it again!\n"
-    "You can download the current script via:\n\n"
-    f"wget -O scaling.py {SCALING_SCRIPT_LINK}")
+WRONG_PASSWORD_MSG = f"The password seems to be wrong. Please verify it again, otherwise you can generate a new one on the Cluster Overview ({CLUSTER_OVERVIEW})"
+OUTDATED_SCRIPT_MSG = f"Your script is outdated [VERSION: {{SCRIPT_VERSION}} - latest is {{LATEST_VERSION}}] - please download the current script and run it again!\nYou can download the current script via:\n\nwget -O scaling.py {SCALING_SCRIPT_LINK}"
+
+
+def main():
+    args = parse_arguments()
+    if args.version:
+        print(f"Version: {VERSION}")
+        sys.exit()
+
+    password = get_password()
+    if args.force:
+        print(f"Force Parameter Provided... Force Playbook Run")
+
+    file_changed = update_all_yml_files(password)
+
+    if file_changed:
+        print("Files changed. Running playbook...")
+        run_ansible_playbook()
+    elif args.force:
+        print("Force run requested. Running playbook...")
+        run_ansible_playbook()
+    else:
+        print(
+            "No changes detected and no force run requested. Skipping playbook execution.")
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description="Cluster Scaling Script")
+    parser.add_argument("-v", "--version", action="store_true",
+                        help="Show the version and exit")
+    parser.add_argument("-f", "--force", action="store_true",
+                        help="Force Playbook Run")
+
+    return parser.parse_args()
+
+
+def get_password():
+    password = getpass(
+        "Please enter your cluster password (input will be hidden): ")
+    if not password:
+        print("Password must not be empty!")
+        sys.exit(1)
+    return password
 
 
 def update_all_yml_files(password):
-    print("initiate scaling")
+    print("Initiating scaling...")
     data = get_cluster_data(password)
-    replace_cidr_for_nsf_mount()
-    if data is None:
-        print("get scaling  data: None")
+    print(data)
+
+    if not data:
+        print("Failed to retrieve scaling data.")
         return False
-    master_data = data["master"]
-    cluster_data = [
-        worker
-        for worker in data["active_worker"]
-        if worker is not None
-           and worker.get("status", "").lower() == "active"
-           and worker.get("ip") is not None
-    ]
+    groups_vars = data.get("groups_vars", {})
+    hosts_entries = data.get("host_entries", {})
+    ansible_hosts = data.get("ansible_hosts", {})
+    try:
+        changed_hosts = replace_ansible_hosts(ansible_hosts)
+        print(f"changed hosts --> {changed_hosts}")
+        changed_host_entries = replace_host_entries(hosts_entries)
+        print(f"changed changed_host_entries --> {changed_host_entries}")
 
-    valid_upscale_ips = [cl["ip"] for cl in cluster_data]
-    print(f"Current Worker IPs: {valid_upscale_ips}")
+        changed_groups = replace_group_vars(groups_vars)
+        print(f"changed changed_groups --> {changed_groups}")
 
-    delete_workers_ip_yaml(valid_upscale_ips=valid_upscale_ips)
+        return changed_hosts or changed_host_entries or changed_groups
+
+    except:
+        print(f"Could not get hosts entries! -- {data}")
+        sys.exit(1)
+    return False
 
 
+def replace_group_vars(groups_vars):
+    something_changed = False
+    for key, value in groups_vars.items():
+        file_path = os.path.join(PLAYBOOK_GROUP_VARS_DIR, f"{key}.yaml")
+        if not os.path.exists(file_path):
+            something_changed = True
+        yaml_data = yaml.dump(value, default_flow_style=False)
+        backup_and_replace(file_path, yaml_data)
 
-    if cluster_data:
-        workers_data = create_worker_yml_file(cluster_data=cluster_data)
+        if not something_changed and not filecmp.cmp(file_path, file_path + '.bak'):
+            something_changed = True
 
+    return something_changed
+
+
+def replace_host_entries(hosts_entries):
+    return backup_and_replace(ANSIBLE_HOSTS_ENTRIES, yaml.dump(hosts_entries, default_flow_style=False))
+
+
+def replace_ansible_hosts(ansible_hosts):
+    return backup_and_replace(ANSIBLE_HOSTS_FILE, yaml.dump(ansible_hosts, default_flow_style=False))
+
+
+def backup_and_replace(file_path, new_content):
+    backup_file = file_path + '.bak'
+    is_new_file = False
+    if os.path.exists(file_path):
+        shutil.copy2(file_path, backup_file)
     else:
-        print("No active worker found!")
-        workers_data = []
-        generate_dummy_node()
-        sys.exit(0)
-    workers_file_changed = update_workers_yml(
-        worker_data=workers_data, master_data=master_data
-    )
-    host_file_changed = add_ips_to_ansible_hosts(valid_upscale_ips=valid_upscale_ips)
-    return host_file_changed or workers_file_changed
+        is_new_file = True
+    with open(file_path, 'w') as f:
+        f.write(new_content)
 
+    os.chmod(file_path, 0o770)
 
-def generate_dummy_node():
-    print("Generating Dummy Node")
-    # Read slurm.conf file into memory
-    with open("/etc/slurm/slurm.conf", "r") as f:
-        lines = f.readlines()
+    return is_new_file or not filecmp.cmp(file_path, backup_file)
 
-    # Add dummy node if it's not already present
-    dummy_node_added = False
-    for i, line in enumerate(lines):
-        if "NodeName=bibigrid-master" in line:
-            if not any("NodeName=dummy" in x for x in lines):
-                lines.insert(i + 1, "NodeName=dummy SocketsPerBoard=1 CoresPerSocket=1 RealMemory=1\\n")
-                dummy_node_added = True
-            break
-
-    # Update partition configuration to use the dummy node if not already set
-    for i, line in enumerate(lines):
-        if "PartitionName=debug" in line:
-            if "Nodes=dummy" not in line:
-                lines[i] = re.sub(r"(PartitionName=debug\\s+Nodes=\\s*)", r"\\1dummy ", line)
-
-    # Write changes back to file
-    with open("/etc/slurm/slurm.conf", "w") as f:
-        subprocess.run(['sudo', 'tee', '/etc/slurm/slurm.conf'], input='\\n'.join(lines).encode())
 
 def get_cluster_data(password):
-    res = requests.post(url=get_cluster_info_url(),
-                        json={"scaling": "scaling_up", "scaling_type": "manualscaling", "password": password, "version": VERSION})
-    if res.status_code in [405, 400]:
-        print(res.json()["error"])
+    try:
+        res = requests.post(
+            url=get_cluster_info_url(),
+            json={
+                "scaling": "scaling_up",
+                "scaling_type": "manualscaling",
+                "password": password,
+                "version": VERSION
+            },
+            timeout=10
+        )
+    except requests.RequestException as e:
+        print(f"HTTP Request failed: {e}")
         sys.exit(1)
-    elif res.status_code == 200:
 
+    if res.status_code == 200:
         data_json = res.json()
-        version = data_json["VERSION"]
-        if version != VERSION:
-            print(OUTDATED_SCRIPT_MSG.format(SCRIPT_VERSION=VERSION, LATEST_VERSION=version))
+        if data_json.get("VERSION") != VERSION:
+            print(OUTDATED_SCRIPT_MSG.format(
+                SCRIPT_VERSION=VERSION, LATEST_VERSION=data_json["VERSION"]))
             sys.exit(1)
-    elif res.status_code == 401:
+        return data_json
 
+    handle_http_errors(res)
+    return None
+
+
+def handle_http_errors(response):
+    if response.status_code == 401:
         print(WRONG_PASSWORD_MSG)
-        sys.exit(1)
-    elif res.status_code == 400:
-        print("An error occured please contact cloud support")
-    return res.json()
-
-
-def update_workers_yml(master_data, worker_data):
-    print("Update Worker YAML")
-    print(f"Update Worker Yaml with data: - {worker_data}")
-    new_file = ANSIBLE_HOSTS_FILE + ".tmp"  # Temporary file to store modified contents
-
-    instances_mod = {
-        "workers": worker_data,
-        "deletedWorkers": [],
-        "master": master_data,
-    }
-    worker_ips = set()
-    unique_workers = []
-
-    for worker in worker_data:
-        ip = worker["ip"]
-        if ip not in worker_ips:
-            unique_workers.append(worker)
-            worker_ips.add(ip)
-    instances_mod["workers"] = unique_workers
-    print(f"New Instance YAML:\n  {instances_mod}")
-
-    with open(new_file, "w", encoding="utf8") as in_file:
-        try:
-            yaml.dump(instances_mod, in_file)
-        except yaml.YAMLError as exc:
-            print("YAML Error: %s", exc)
-            sys.exit(1)
-    workers_file_changed = not filecmp.cmp(INSTANCES_YML, new_file)
-
-    if workers_file_changed:
-        print("Workers  file has changed!")
-        # Replace the original file with the modified file
-        os.replace(new_file, INSTANCES_YML)
+    elif response.status_code in [400, 405]:
+        error_msg = response.json().get("error", "An unspecified error occurred.")
+        print(error_msg)
     else:
-        # Remove the temporary file
-        print("Workers  file has NOT changed!")
+        print(f"Unexpected HTTP error: {response.status_code}")
 
-        os.remove(new_file)
-
-    return workers_file_changed
-
-
-def replace_cidr_for_nsf_mount():
-    print("Get CIDR from common configuration")
-    with open(COMMON_CONFIGURATION_YML, "r", encoding="utf8") as stream:
-
-        try:
-            common_configuration_data = yaml.safe_load(stream)
-            cidr = common_configuration_data["CIDR"]
-            print(f"Current CIDR: {cidr}")
-            new_cidr = cidr[:7] + ".0.0/16"
-            if cidr == new_cidr:
-                print("CIDR is already fixed!")
-                return
-            common_configuration_data["CIDR"] = new_cidr
-
-        except yaml.YAMLError as exc:
-            print(exc)
-            sys.exit(1)
-    with open(COMMON_CONFIGURATION_YML, "w", encoding="utf8") as f:
-        print(f"Replace old CIDR with: {new_cidr}")
-        yaml.dump(common_configuration_data, f)
-
-
-def validate_ip(ip):
-    print("Validate  IP: ", ip)
-    return re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", ip)
-
-
-def create_worker_yml_file(cluster_data):
-    workers_data = []
-    for data in cluster_data:
-        yaml_file_target = PLAYBOOK_VARS_DIR + "/" + data["ip"] + ".yml"
-        if not os.path.exists(yaml_file_target):
-            with open(yaml_file_target, "w+", encoding="utf8") as target:
-                try:
-                    yaml.dump(data, target)
-                except yaml.YAMLError as exc:
-                    print("YAMLError ", exc)
-                    sys.exit(1)
-        else:
-            print(f"Yaml for worker with IP {data['ip']} already exists")
-        workers_data.append(data)
-
-    return workers_data
-
-
-def delete_workers_ip_yaml(valid_upscale_ips):
-    ip_pattern = r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
-    files = os.listdir(PLAYBOOK_VARS_DIR)
-    ip_addresses = []
-    for file in files:
-        match = re.search(ip_pattern, file)
-        if match:
-            ip_addresses.append(match.group())
-    for ip in ip_addresses:
-        if ip not in valid_upscale_ips:
-            yaml_file = PLAYBOOK_VARS_DIR + "/" + ip + ".yml"
-            if os.path.isfile(yaml_file):
-                os.remove(yaml_file)
-                print("Deleted YAML ", yaml_file)
-
-            else:
-                print("Yaml already deleted: ", yaml_file)
-
-
-def add_ips_to_ansible_hosts(valid_upscale_ips) -> bool:
-    print("Add IPs to ansible_hosts")
-
-    original_file = ANSIBLE_HOSTS_FILE
-    new_file = ANSIBLE_HOSTS_FILE + ".tmp"  # Temporary file to store modified contents
-
-    with open(original_file, "r", encoding="utf8") as in_file:
-        lines = in_file.readlines()
-
-    with open(new_file, "w", encoding="utf8") as out_file:
-        found_workers = False
-        for line in lines:
-            if "[workers]" in line:
-                found_workers = True
-                out_file.write(line)
-                for ip in valid_upscale_ips:
-                    ip_line = f"{ip} ansible_connection=ssh ansible_python_interpreter=/usr/bin/python3 ansible_user=ubuntu\n"
-                    out_file.write(ip_line)
-            elif not found_workers:
-                out_file.write(line)
-
-    hosts_file_changed = not filecmp.cmp(original_file, new_file)
-
-    if hosts_file_changed:
-        print("Ansible Host file has changed!")
-        # Replace the original file with the modified file
-        os.replace(new_file, original_file)
-    else:
-        # Remove the temporary file
-        print("Ansible Host file has NOT changed!")
-
-        os.remove(new_file)
-
-    return hosts_file_changed
-
-
-def get_version():
-    print("Version: ", VERSION)
-
-
-def get_cluster_id_by_hostname():
-    hostname = socket.gethostname()
-    cluster_id = hostname.split('-')[-1]
-    return cluster_id
+    sys.exit(1)
 
 
 def get_cluster_info_url():
-    cluster_id = get_cluster_id_by_hostname()
-
-    full_info_url = CLUSTER_INFO_URL.format(cluster_id=cluster_id)
-    return full_info_url
+    cluster_id = socket.gethostname().split('-')[-1]
+    return CLUSTER_INFO_URL.format(cluster_id=cluster_id)
 
 
 def run_ansible_playbook():
     os.chdir(PLAYBOOK_DIR)
     forks = os.cpu_count() * 4
-    ansible_command = f"ansible-playbook -v  --forks {forks} -i ansible_hosts  site.yml"
-    print(f"Run Ansible Command:\n{ansible_command}")
+    ansible_command = f"bibiplay --forks {forks}"
+    print(f"Running Ansible Command:\n{ansible_command}")
     os.system(ansible_command)
 
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        arg = sys.argv[1]
-        if arg in ["-v", "--v", "-version", "--version"]:
-            get_version()
-        else:
-            print("No usage found for param: ", arg)
-    else:
-        print("Please enter your cluster password:")
-        password = getpass()
-        if not password:
-            print("Password must not be empty!")
-            sys.exit(1)
-        file_changed = update_all_yml_files(password=password)
-        if file_changed:
-            print("Files changed running playbook")
-
-            run_ansible_playbook()
-        else:
-            print("No changes -- skipping playbook")
+    main()
