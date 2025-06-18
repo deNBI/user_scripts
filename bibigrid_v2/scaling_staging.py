@@ -29,8 +29,11 @@ def main():
     if args.version:
         print(f"Version: {VERSION}")
         sys.exit()
-
-    password = get_password()
+    if args.password:
+        print("Password provided via arg..")
+        password = args.password
+    else:
+        password = get_password()
     if args.force:
         print(f"Force Parameter Provided... Force Playbook Run")
 
@@ -53,7 +56,8 @@ def parse_arguments():
                         help="Show the version and exit")
     parser.add_argument("-f", "--force", action="store_true",
                         help="Force Playbook Run")
-
+    parser.add_argument("-p", "--password", type=str, required=False,
+                        help="Provide Password via Arg")
     return parser.parse_args()
 
 
@@ -187,3 +191,4 @@ def run_ansible_playbook():
 
 if __name__ == '__main__':
     main()
+
