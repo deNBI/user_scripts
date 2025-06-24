@@ -184,7 +184,7 @@ def get_cluster_info_url():
 def run_ansible_playbook():
     os.chdir(PLAYBOOK_DIR)
     forks = os.cpu_count() * 4
-    ansible_command = f"bibiplay --forks {forks}"
+    ansible_command = f"bibiplay --forks {forks} --limit '!bibigrid-worker-autoscaling_dummy'"
     print(f"Running Ansible Command:\n{ansible_command}")
     os.system(ansible_command)
 
