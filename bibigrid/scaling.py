@@ -10,7 +10,7 @@ import requests
 import yaml
 import argparse
 import json
-VERSION = "0.1.0"
+VERSION = "0.7.0"
 HOME = str(Path.home())
 PLAYBOOK_DIR = os.path.join(HOME, 'playbook')
 PLAYBOOK_VARS_DIR = os.path.join(PLAYBOOK_DIR, 'vars')
