@@ -9,9 +9,8 @@ from pathlib import Path
 import requests
 import yaml
 import argparse
-import json
 
-VERSION = "0.7.0"
+VERSION = "0.8.0"
 HOME = str(Path.home())
 PLAYBOOK_DIR = os.path.join(HOME, "playbook")
 PLAYBOOK_VARS_DIR = os.path.join(PLAYBOOK_DIR, "vars")
@@ -22,7 +21,7 @@ ANSIBLE_HOSTS_ENTRIES = os.path.join(PLAYBOOK_VARS_DIR, "hosts.yaml")
 PLAYBOOK_GROUP_VARS_DIR = os.path.join(PLAYBOOK_DIR, "group_vars")
 SCALING_TYPE = "manualscaling"
 CLUSTER_INFO_URL = (
-    "https://simplevm.denbi.de/portal/api/autoscaling/{cluster_id}/scale-data/"
+    "https://simplevm-dev.bi.denbi.de/portal/api/autoscaling/{cluster_id}/scale-data/"
 )
 SCALING_SCRIPT_LINK = (
     "https://raw.githubusercontent.com/deNBI/user_scripts/master/bibigrid/scaling.py"
@@ -145,7 +144,7 @@ def replace_cluster_cidrs(new_cidrs: list[str]) -> bool:
     changed = False
     for cluster in data.get("cluster_cidrs", []):
         current_cidrs = cluster.get("provider_cidrs", [])
-        if current_cidrs != new_cidrs: 
+        if current_cidrs != new_cidrs:
             cluster["provider_cidrs"] = new_cidrs
             changed = True
 
@@ -215,6 +214,7 @@ def handle_http_errors(response):
 
 def get_cluster_info_url():
     cluster_id = socket.gethostname().split("-")[-1]
+    print(f"clsuter id {cluster_id}")
     return CLUSTER_INFO_URL.format(cluster_id=cluster_id)
 
 
