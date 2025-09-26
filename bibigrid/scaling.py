@@ -9,17 +9,23 @@ from pathlib import Path
 import requests
 import yaml
 import argparse
-import json
-VERSION = "0.7.0"
+
+VERSION = "0.8.0"
 HOME = str(Path.home())
-PLAYBOOK_DIR = os.path.join(HOME, 'playbook')
-PLAYBOOK_VARS_DIR = os.path.join(PLAYBOOK_DIR, 'vars')
-ANSIBLE_HOSTS_FILE = os.path.join(PLAYBOOK_DIR, 'ansible_hosts')
-ANSIBLE_HOSTS_ENTRIES = os.path.join(PLAYBOOK_VARS_DIR, 'hosts.yaml')
-PLAYBOOK_GROUP_VARS_DIR = os.path.join(PLAYBOOK_DIR, 'group_vars')
-SCALING_TYPE="manualscaling"
-CLUSTER_INFO_URL = "https://simplevm.denbi.de/portal/api/autoscaling/{cluster_id}/scale-data/"
-SCALING_SCRIPT_LINK = "https://raw.githubusercontent.com/deNBI/user_scripts/master/bibigrid/scaling.py"
+PLAYBOOK_DIR = os.path.join(HOME, "playbook")
+PLAYBOOK_VARS_DIR = os.path.join(PLAYBOOK_DIR, "vars")
+COMMON_VARS_FILE = os.path.join(PLAYBOOK_VARS_DIR, "common_configuration.yaml")
+
+ANSIBLE_HOSTS_FILE = os.path.join(PLAYBOOK_DIR, "ansible_hosts")
+ANSIBLE_HOSTS_ENTRIES = os.path.join(PLAYBOOK_VARS_DIR, "hosts.yaml")
+PLAYBOOK_GROUP_VARS_DIR = os.path.join(PLAYBOOK_DIR, "group_vars")
+SCALING_TYPE = "manualscaling"
+CLUSTER_INFO_URL = (
+    "https://simplevm-dev.bi.denbi.de/portal/api/autoscaling/{cluster_id}/scale-data/"
+)
+SCALING_SCRIPT_LINK = (
+    "https://raw.githubusercontent.com/deNBI/user_scripts/master/bibigrid/scaling.py"
+)
 CLUSTER_OVERVIEW = "https://simplevm.denbi.de/portal/webapp/#/clusters/overview"
 WRONG_PASSWORD_MSG = f"The password seems to be wrong. Please verify it again, otherwise you can generate a new one on the Cluster Overview ({CLUSTER_OVERVIEW})"
 OUTDATED_SCRIPT_MSG = f"Your script is outdated [VERSION: {{SCRIPT_VERSION}} - latest is {{LATEST_VERSION}}] - please download the current script and run it again!\nYou can download the current script via:\n\nwget -O scaling.py {SCALING_SCRIPT_LINK}"
@@ -48,23 +54,24 @@ def main():
         run_ansible_playbook()
     else:
         print(
-            "No changes detected and no force run requested. Skipping playbook execution.")
+            "No changes detected and no force run requested. Skipping playbook execution."
+        )
 
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Cluster Scaling Script")
-    parser.add_argument("-v", "--version", action="store_true",
-                        help="Show the version and exit")
-    parser.add_argument("-f", "--force", action="store_true",
-                        help="Force Playbook Run")
-    parser.add_argument("-p", "--password", type=str, required=False,
-                        help="Provide Password via Arg")
+    parser.add_argument(
+        "-v", "--version", action="store_true", help="Show the version and exit"
+    )
+    parser.add_argument("-f", "--force", action="store_true", help="Force Playbook Run")
+    parser.add_argument(
+        "-p", "--password", type=str, required=False, help="Provide Password via Arg"
+    )
     return parser.parse_args()
 
 
 def get_password():
-    password = getpass(
-        "Please enter your cluster password (input will be hidden): ")
+    password = getpass("Please enter your cluster password (input will be hidden): ")
     if not password:
         print("Password must not be empty!")
         sys.exit(1)
@@ -82,6 +89,7 @@ def update_all_yml_files(password):
     groups_vars = data.get("groups_vars", {})
     hosts_entries = data.get("host_entries", {})
     ansible_hosts = data.get("ansible_hosts", {})
+    cluster_cidrs = data.get("cluster_cidrs", [])
     try:
         changed_hosts = replace_ansible_hosts(ansible_hosts)
         print(f"changed hosts --> {changed_hosts}")
@@ -91,7 +99,10 @@ def update_all_yml_files(password):
         changed_groups = replace_group_vars(groups_vars)
         print(f"changed changed_groups --> {changed_groups}")
 
-        return changed_hosts or changed_host_entries or changed_groups
+        changed_cidrs = replace_cluster_cidrs(new_cidrs=cluster_cidrs)
+        print(f"changed cidr --> {changed_cidrs}")
+
+        return changed_hosts or changed_host_entries or changed_groups or changed_cidrs
 
     except:
         print(f"Could not get hosts entries! -- {data}")
@@ -108,28 +119,49 @@ def replace_group_vars(groups_vars):
         yaml_data = yaml.dump(value, default_flow_style=False)
         backup_and_replace(file_path, yaml_data)
 
-        if not something_changed and not filecmp.cmp(file_path, file_path + '.bak'):
+        if not something_changed and not filecmp.cmp(file_path, file_path + ".bak"):
             something_changed = True
 
     return something_changed
 
 
 def replace_host_entries(hosts_entries):
-    return backup_and_replace(ANSIBLE_HOSTS_ENTRIES, yaml.dump(hosts_entries, default_flow_style=False))
+    return backup_and_replace(
+        ANSIBLE_HOSTS_ENTRIES, yaml.dump(hosts_entries, default_flow_style=False)
+    )
 
 
 def replace_ansible_hosts(ansible_hosts):
-    return backup_and_replace(ANSIBLE_HOSTS_FILE, yaml.dump(ansible_hosts, default_flow_style=False))
+    return backup_and_replace(
+        ANSIBLE_HOSTS_FILE, yaml.dump(ansible_hosts, default_flow_style=False)
+    )
+
+
+def replace_cluster_cidrs(new_cidrs: list[str]) -> bool:
+    with open(COMMON_VARS_FILE, "r") as f:
+        data = yaml.safe_load(f)
+
+    changed = False
+    for cluster in data.get("cluster_cidrs", []):
+        current_cidrs = cluster.get("provider_cidrs", [])
+        if current_cidrs != new_cidrs:
+            cluster["provider_cidrs"] = new_cidrs
+            changed = True
+
+    if changed:
+        yaml_content = yaml.safe_dump(data, default_flow_style=False)
+        return backup_and_replace(COMMON_VARS_FILE, yaml_content)
+    return False
 
 
 def backup_and_replace(file_path, new_content):
-    backup_file = file_path + '.bak'
+    backup_file = file_path + ".bak"
     is_new_file = False
     if os.path.exists(file_path):
         shutil.copy2(file_path, backup_file)
     else:
         is_new_file = True
-    with open(file_path, 'w') as f:
+    with open(file_path, "w") as f:
         f.write(new_content)
 
     os.chmod(file_path, 0o770)
@@ -145,9 +177,9 @@ def get_cluster_data(password):
                 "scaling": "scaling_up",
                 "scaling_type": SCALING_TYPE,
                 "password": password,
-                "version": VERSION
+                "version": VERSION,
             },
-            timeout=10
+            timeout=10,
         )
     except requests.RequestException as e:
         print(f"HTTP Request failed: {e}")
@@ -156,8 +188,11 @@ def get_cluster_data(password):
     if res.status_code == 200:
         data_json = res.json()
         if data_json.get("VERSION") != VERSION:
-            print(OUTDATED_SCRIPT_MSG.format(
-                SCRIPT_VERSION=VERSION, LATEST_VERSION=data_json["VERSION"]))
+            print(
+                OUTDATED_SCRIPT_MSG.format(
+                    SCRIPT_VERSION=VERSION, LATEST_VERSION=data_json["VERSION"]
+                )
+            )
             sys.exit(1)
         return data_json
 
@@ -178,17 +213,20 @@ def handle_http_errors(response):
 
 
 def get_cluster_info_url():
-    cluster_id = socket.gethostname().split('-')[-1]
+    cluster_id = socket.gethostname().split("-")[-1]
+    print(f"clsuter id {cluster_id}")
     return CLUSTER_INFO_URL.format(cluster_id=cluster_id)
 
 
 def run_ansible_playbook():
     os.chdir(PLAYBOOK_DIR)
     forks = os.cpu_count() * 4
-    ansible_command = f"bibiplay --forks {forks} --limit '!bibigrid-worker-autoscaling_dummy'"
+    ansible_command = (
+        f"bibiplay --forks {forks} --limit '!bibigrid-worker-autoscaling_dummy'"
+    )
     print(f"Running Ansible Command:\n{ansible_command}")
     os.system(ansible_command)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
