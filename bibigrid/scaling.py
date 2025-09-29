@@ -21,7 +21,7 @@ ANSIBLE_HOSTS_ENTRIES = os.path.join(PLAYBOOK_VARS_DIR, "hosts.yaml")
 PLAYBOOK_GROUP_VARS_DIR = os.path.join(PLAYBOOK_DIR, "group_vars")
 SCALING_TYPE = "manualscaling"
 CLUSTER_INFO_URL = (
-    "https://simplevm-dev.bi.denbi.de/portal/api/autoscaling/{cluster_id}/scale-data/"
+    "https://simplevm.denbi.de/portal/api/autoscaling/{cluster_id}/scale-data/"
 )
 SCALING_SCRIPT_LINK = (
     "https://raw.githubusercontent.com/deNBI/user_scripts/master/bibigrid/scaling.py"
