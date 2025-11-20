@@ -10,7 +10,7 @@ import requests
 import yaml
 import argparse
 
-VERSION = "0.8.0"
+VERSION = "0.9.0"
 HOME = str(Path.home())
 PLAYBOOK_DIR = os.path.join(HOME, "playbook")
 PLAYBOOK_VARS_DIR = os.path.join(PLAYBOOK_DIR, "vars")
@@ -19,6 +19,7 @@ COMMON_VARS_FILE = os.path.join(PLAYBOOK_VARS_DIR, "common_configuration.yaml")
 ANSIBLE_HOSTS_FILE = os.path.join(PLAYBOOK_DIR, "ansible_hosts")
 ANSIBLE_HOSTS_ENTRIES = os.path.join(PLAYBOOK_VARS_DIR, "hosts.yaml")
 PLAYBOOK_GROUP_VARS_DIR = os.path.join(PLAYBOOK_DIR, "group_vars")
+HOST_VARS_DIR = os.path.join(PLAYBOOK_DIR, "host_vars")
 SCALING_TYPE = "manualscaling"
 CLUSTER_INFO_URL = (
     "https://simplevm.denbi.de/portal/api/autoscaling/{cluster_id}/scale-data/"
@@ -81,7 +82,6 @@ def get_password():
 def update_all_yml_files(password):
     print("Initiating scaling...")
     data = get_cluster_data(password)
-    print(data)
 
     if not data:
         print("Failed to retrieve scaling data.")
@@ -90,6 +90,7 @@ def update_all_yml_files(password):
     hosts_entries = data.get("host_entries", {})
     ansible_hosts = data.get("ansible_hosts", {})
     cluster_cidrs = data.get("cluster_cidrs", [])
+    workers_vars = data.get("workers")
     try:
         changed_hosts = replace_ansible_hosts(ansible_hosts)
         print(f"changed hosts --> {changed_hosts}")
@@ -102,7 +103,16 @@ def update_all_yml_files(password):
         changed_cidrs = replace_cluster_cidrs(new_cidrs=cluster_cidrs)
         print(f"changed cidr --> {changed_cidrs}")
 
-        return changed_hosts or changed_host_entries or changed_groups or changed_cidrs
+        changed_volumes = replace_volumes_entries(workers_vars)
+        print(f"changed volumes --> {changed_volumes}")
+
+        return (
+            changed_hosts
+            or changed_host_entries
+            or changed_groups
+            or changed_cidrs
+            or changed_volumes
+        )
 
     except:
         print(f"Could not get hosts entries! -- {data}")
@@ -110,29 +120,75 @@ def update_all_yml_files(password):
     return False
 
 
+def replace_volumes_entries(workers_vars):
+    changed = False
+
+    expected_files = set()
+
+    for worker in workers_vars:
+        hostname = worker.get("hostname")
+        volumes = worker.get("volumes")
+
+        if not hostname or volumes is None:
+            continue  # Skip malformed entries
+
+        file_name = f"{hostname}.yaml"
+        file_path = os.path.join(HOST_VARS_DIR, file_name)
+        expected_files.add(file_name)
+
+        # Serialize the volumes into YAML format
+        yaml_data = yaml.dump({"volumes": volumes}, default_flow_style=False)
+
+        # Replace the file if content has changed
+        file_changed = replace_if_changed(file_path, yaml_data)
+
+        if file_changed:
+            changed = True
+
+    # Remove unexpected files
+    for file in os.listdir(HOST_VARS_DIR):
+        if file.endswith(".yaml") and file not in expected_files:
+            full_path = os.path.join(HOST_VARS_DIR, file)
+            os.remove(full_path)
+            changed = True
+
+    return changed
+
 def replace_group_vars(groups_vars):
-    something_changed = False
+    changed = False
+    expected_files = set()
+
     for key, value in groups_vars.items():
-        file_path = os.path.join(PLAYBOOK_GROUP_VARS_DIR, f"{key}.yaml")
-        if not os.path.exists(file_path):
-            something_changed = True
+        if key == "master":
+            continue  # Do not manage master.yaml
+
+        file_name = f"{key}.yaml"
+        file_path = os.path.join(PLAYBOOK_GROUP_VARS_DIR, file_name)
+        expected_files.add(file_name)
+
         yaml_data = yaml.dump(value, default_flow_style=False)
-        backup_and_replace(file_path, yaml_data)
 
-        if not something_changed and not filecmp.cmp(file_path, file_path + ".bak"):
-            something_changed = True
+        file_changed = replace_if_changed(file_path, yaml_data)
+        if file_changed:
+            changed = True
 
-    return something_changed
+    # Clean up unexpected files, except master.yaml
+    for file in os.listdir(PLAYBOOK_GROUP_VARS_DIR):
+        if file.endswith(".yaml") and file not in expected_files and file != "master.yaml":
+            full_path = os.path.join(PLAYBOOK_GROUP_VARS_DIR, file)
+            os.remove(full_path)
+            changed = True
 
+    return changed
 
 def replace_host_entries(hosts_entries):
-    return backup_and_replace(
+    return replace_if_changed(
         ANSIBLE_HOSTS_ENTRIES, yaml.dump(hosts_entries, default_flow_style=False)
     )
 
 
 def replace_ansible_hosts(ansible_hosts):
-    return backup_and_replace(
+    return replace_if_changed(
         ANSIBLE_HOSTS_FILE, yaml.dump(ansible_hosts, default_flow_style=False)
     )
 
@@ -150,23 +206,26 @@ def replace_cluster_cidrs(new_cidrs: list[str]) -> bool:
 
     if changed:
         yaml_content = yaml.safe_dump(data, default_flow_style=False)
-        return backup_and_replace(COMMON_VARS_FILE, yaml_content)
+        return replace_if_changed(COMMON_VARS_FILE, yaml_content)
     return False
 
 
-def backup_and_replace(file_path, new_content):
-    backup_file = file_path + ".bak"
-    is_new_file = False
-    if os.path.exists(file_path):
-        shutil.copy2(file_path, backup_file)
+def replace_if_changed(file_path, new_content):
+    is_new_file = not os.path.exists(file_path)
+
+    if not is_new_file:
+        with open(file_path, "r") as f:
+            current_content = f.read()
+        has_changed = current_content != new_content
     else:
-        is_new_file = True
+        has_changed = True
+
     with open(file_path, "w") as f:
         f.write(new_content)
 
     os.chmod(file_path, 0o770)
 
-    return is_new_file or not filecmp.cmp(file_path, backup_file)
+    return has_changed
 
 
 def get_cluster_data(password):
@@ -222,7 +281,7 @@ def run_ansible_playbook():
     os.chdir(PLAYBOOK_DIR)
     forks = os.cpu_count() * 4
     ansible_command = (
-        f"bibiplay --forks {forks} --limit '!bibigrid-worker-autoscaling_dummy'"
+        f"bibiplay --forks {forks} --limit '!bibigrid-worker-autoscaling-dummy'"
     )
     print(f"Running Ansible Command:\n{ansible_command}")
     os.system(ansible_command)
