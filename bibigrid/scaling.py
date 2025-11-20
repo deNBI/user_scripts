@@ -10,7 +10,7 @@ import requests
 import yaml
 import argparse
 
-VERSION = "0.8.0"
+VERSION = "0.9.0"
 HOME = str(Path.home())
 PLAYBOOK_DIR = os.path.join(HOME, "playbook")
 PLAYBOOK_VARS_DIR = os.path.join(PLAYBOOK_DIR, "vars")
@@ -22,7 +22,7 @@ PLAYBOOK_GROUP_VARS_DIR = os.path.join(PLAYBOOK_DIR, "group_vars")
 HOST_VARS_DIR = os.path.join(PLAYBOOK_DIR, "host_vars")
 SCALING_TYPE = "manualscaling"
 CLUSTER_INFO_URL = (
-    "https://simplevm-dev.bi.denbi.de/portal/api/autoscaling/{cluster_id}/scale-data/"
+    "https://simplevm.denbi.de/portal/api/autoscaling/{cluster_id}/scale-data/"
 )
 SCALING_SCRIPT_LINK = (
     "https://raw.githubusercontent.com/deNBI/user_scripts/master/bibigrid/scaling.py"
