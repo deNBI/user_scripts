@@ -10,12 +10,12 @@ import requests
 import yaml
 import argparse
 
-VERSION = "0.9.0"
+VERSION = "0.10.0"
 HOME = str(Path.home())
 PLAYBOOK_DIR = os.path.join(HOME, "playbook")
 PLAYBOOK_VARS_DIR = os.path.join(PLAYBOOK_DIR, "vars")
 COMMON_VARS_FILE = os.path.join(PLAYBOOK_VARS_DIR, "common_configuration.yaml")
-
+REQUEST_TIMEOUT=60
 ANSIBLE_HOSTS_FILE = os.path.join(PLAYBOOK_DIR, "ansible_hosts")
 ANSIBLE_HOSTS_ENTRIES = os.path.join(PLAYBOOK_VARS_DIR, "hosts.yaml")
 PLAYBOOK_GROUP_VARS_DIR = os.path.join(PLAYBOOK_DIR, "group_vars")
@@ -238,7 +238,7 @@ def get_cluster_data(password):
                 "password": password,
                 "version": VERSION,
             },
-            timeout=10,
+            timeout=REQUEST_TIMEOUT,
         )
     except requests.RequestException as e:
         print(f"HTTP Request failed: {e}")
